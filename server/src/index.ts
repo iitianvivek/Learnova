@@ -15,17 +15,25 @@ import adminRoutes from './routes/admin';
 import enquiryRoutes from './routes/enquiries';
 
 const app = express();
-const PORT = 5000;
+
+// Use Render's PORT in production, fallback to 5000 locally
+const PORT = Number(process.env.PORT) || 5000;
 
 // Middleware
-app.use(cors({ origin: 'http://localhost:3000', credentials: true }));
+app.use(
+  cors({
+    origin: true,
+    credentials: true,
+  })
+);
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Serve uploaded files as static
+// Serve uploaded files
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
-// Routes
+// API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/institutes', instituteRoutes);
 app.use('/api/tutors', tutorRoutes);
@@ -35,13 +43,23 @@ app.use('/api/bookmarks', bookmarkRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/enquiries', enquiryRoutes);
 
-// Health check
+// Health Check
 app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({
+    status: 'ok',
+    message: 'Learnova API is running',
+    timestamp: new Date().toISOString(),
+  });
 });
 
+// Root Route
+app.get('/', (_req, res) => {
+  res.send('Learnova API is running 🚀');
+});
+
+// Start Server
 app.listen(PORT, () => {
-  console.log(`\n  Learnova API running at http://localhost:${PORT}\n`);
+  console.log(`🚀 Learnova API running on port ${PORT}`);
 });
 
 export default app;
