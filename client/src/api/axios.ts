@@ -1,11 +1,12 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: '/api',
-  headers: { 'Content-Type': 'application/json' },
+  baseURL: import.meta.env.VITE_API_URL || '/api',
+  headers: {
+    'Content-Type': 'application/json',
+  },
 });
 
-// Attach token from localStorage on every request
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('learnova_token');
   if (token) {
@@ -14,7 +15,6 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Handle 401 globally - clear stale tokens
 api.interceptors.response.use(
   (response) => response,
   (error) => {
