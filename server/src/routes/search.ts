@@ -164,13 +164,18 @@ router.get('/compare', (req: Request, res: Response): void => {
     }
 
     // Find shared courses across all selected institutes
+    // Find shared courses across all selected institutes
     if (items.length > 1) {
-      const allCourseSets = items.map((inst: any) =>
-        new Set(inst.courses.map((c: any) => c.course_id))
+      const allCourseSets: Set<number>[] = items.map((inst: any) =>
+        new Set<number>(
+          inst.courses.map((c: any) => Number(c.course_id))
+        )
       );
-      const sharedCourseIds = [...allCourseSets[0]].filter(cid =>
-        allCourseSets.every((s: Set<number>) => s.has(cid))
+
+      const sharedCourseIds = Array.from(allCourseSets[0]).filter((cid: number) =>
+        allCourseSets.every((s) => s.has(cid))
       );
+
       res.json({ items, sharedCourseIds, type: 'institute' });
       return;
     }
