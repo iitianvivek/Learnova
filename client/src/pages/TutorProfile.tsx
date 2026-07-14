@@ -73,7 +73,7 @@ export default function TutorProfile() {
                 </div>
                 <div className="bg-green-50 rounded-xl p-3">
                   <div className="flex items-center justify-center gap-1 text-green-600 mb-1">
-                    <DollarSign className="w-4 h-4" />
+                    <IndianRupee className="w-4 h-4" />
                   </div>
                   <p className="font-bold text-gray-900">{tutor.hourly_rate > 0 ? `₹${tutor.hourly_rate}` : '—'}</p>
                   <p className="text-gray-400 text-xs">per hour</p>
