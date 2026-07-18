@@ -1,10 +1,12 @@
-import React from 'react';
+import type { ReactNode } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Navbar from './components/Navbar';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import PlanSelection from './pages/PlanSelection';
+import Checkout from './pages/Checkout';
 import Search from './pages/Search';
 import Compare from './pages/Compare';
 import InstituteProfile from './pages/InstituteProfile';
@@ -16,7 +18,7 @@ import AdminDashboard from './pages/admin/AdminDashboard';
 import NotFound from './pages/NotFound';
 import Terms from './pages/Terms';
 
-function ProtectedRoute({ children, roles }: { children: React.ReactNode; roles?: string[] }) {
+function ProtectedRoute({ children, roles }: { children: ReactNode; roles?: string[] }) {
   const { user, isAuthenticated, loading } = useAuth();
   if (loading) return <div className="min-h-screen flex items-center justify-center text-gray-400">Loading...</div>;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
@@ -27,7 +29,7 @@ function ProtectedRoute({ children, roles }: { children: React.ReactNode; roles?
 function AppContent() {
   const { loading } = useAuth();
   const location = useLocation();
-  const hideNavbar = ['/login', '/register'].includes(location.pathname);
+  const hideNavbar = location.pathname === '/login' || location.pathname.startsWith('/register');
 
   if (loading) return <div className="min-h-screen flex items-center justify-center text-gray-400">Loading...</div>;
 
@@ -37,6 +39,8 @@ function AppContent() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/register/plans" element={<PlanSelection />} />
+        <Route path="/register/checkout" element={<Checkout />} />
         <Route path="/" element={<Home />} />
         <Route path="/search" element={<Search />} />
         <Route path="/compare" element={<Compare />} />

@@ -1,8 +1,8 @@
-import React from 'react';
 import { Link } from 'react-router-dom';
 import { MapPin, BookOpen, ChevronRight, PlusCircle, Check } from 'lucide-react';
 import type { Institute } from '../types';
 import StarRating from './StarRating';
+import { getUploadUrl } from '../utils/runtime';
 
 interface InstituteCardProps {
   institute: Institute;
@@ -19,7 +19,7 @@ const PLACEHOLDER_GRADIENTS = [
 ];
 
 export default function InstituteCard({ institute, showCompare, onCompare, compareSelected }: InstituteCardProps) {
-  const imageUrl = institute.thumbnail ? `/uploads/${institute.thumbnail}` : null;
+  const imageUrl = institute.thumbnail ? getUploadUrl(institute.thumbnail) : null;
   const gradient = PLACEHOLDER_GRADIENTS[institute.id % PLACEHOLDER_GRADIENTS.length];
 
   return (

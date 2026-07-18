@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Search, SlidersHorizontal, X, BookOpen, Users } from 'lucide-react';
 import type { SearchResults, Course } from '../types';
@@ -27,6 +27,12 @@ export default function SearchPage() {
 
   const [compareList, setCompareList] = useState<{ id: number; type: 'institute' | 'tutor' }[]>([]);
 
+  const compareBreakdown = useMemo(() => {
+    const institutes = compareList.filter(item => item.type === 'institute').length;
+    const tutors = compareList.filter(item => item.type === 'tutor').length;
+    return { institutes, tutors };
+  }, [compareList]);
+
   useEffect(() => {
     api.get('/search/courses').then(({ data }) => setCourses(data)).catch(() => {});
   }, []);
@@ -49,7 +55,7 @@ export default function SearchPage() {
     } finally {
       setLoading(false);
     }
-  }, [query, type, location, minFee, maxFee, minRating, subject]);
+  }, [query, type, location, minFee, maxFee, minRating, subject, mode, setSearchParams]);
 
   useEffect(() => { doSearch(); }, []);
 
@@ -73,9 +79,12 @@ export default function SearchPage() {
 
   const handleCompare = () => {
     if (compareList.length < 2) { alert('Select at least 2 to compare'); return; }
-    const ids = compareList.map(c => c.id).join(',');
-    const t = compareList[0].type;
-    navigate(`/compare?ids=${ids}&type=${t}`);
+    const institutes = compareList.filter(item => item.type === 'institute').map(item => item.id).join(',');
+    const tutors = compareList.filter(item => item.type === 'tutor').map(item => item.id).join(',');
+    const params = new URLSearchParams();
+    if (institutes) params.set('institutes', institutes);
+    if (tutors) params.set('tutors', tutors);
+    navigate(`/compare?${params.toString()}`);
   };
 
   const total = results.institutes.length + results.tutors.length;
@@ -194,12 +203,19 @@ export default function SearchPage() {
         {/* Compare bar */}
         {compareList.length > 0 && (
           <div className="bg-blue-600 text-white rounded-xl p-4 mb-6 flex items-center justify-between">
-            <span className="text-sm font-semibold">{compareList.length} selected for comparison</span>
+            <div>
+              <p className="text-sm font-semibold">{compareList.length} selected for comparison</p>
+              <p className="text-xs text-blue-100 mt-1">
+                {compareBreakdown.institutes > 0 ? `${compareBreakdown.institutes} institute${compareBreakdown.institutes > 1 ? 's' : ''}` : 'No institutes'}
+                {' · '}
+                {compareBreakdown.tutors > 0 ? `${compareBreakdown.tutors} tutor${compareBreakdown.tutors > 1 ? 's' : ''}` : 'No tutors'}
+              </p>
+            </div>
             <div className="flex gap-3">
               <button onClick={() => setCompareList([])} className="text-blue-200 hover:text-white text-sm">Clear</button>
               <button onClick={handleCompare} disabled={compareList.length < 2}
                 className="bg-white text-blue-600 font-bold px-4 py-1.5 rounded-lg text-sm hover:bg-blue-50 transition-colors">
-                Compare Now
+                Open Compare Workspace
               </button>
             </div>
           </div>

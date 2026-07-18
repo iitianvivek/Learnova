@@ -1,6 +1,8 @@
 import { Router, Response } from 'express';
 import db from '../db/database';
 import { authenticate, requireRole, AuthRequest } from '../middleware/auth';
+import { getInstitutePlanAccessByInstituteId, getInstitutePlanAccessByUserId } from '../services/institutePlanAccess';
+import { getTutorPlanAccessByTutorId, getTutorPlanAccessByUserId } from '../services/tutorPlanAccess';
 
 const router = Router();
 
@@ -17,12 +19,40 @@ router.post('/', authenticate, requireRole('student'), (req: AuthRequest, res: R
     return;
   }
 
+  const targetId = parseInt(target_id);
+
+  if (target_type === 'institute') {
+    const institute = db.prepare("SELECT id FROM institutes WHERE id = ? AND status = 'approved'").get(targetId) as any;
+    if (!institute) {
+      res.status(404).json({ error: 'Institute not found' });
+      return;
+    }
+
+    const planAccess = getInstitutePlanAccessByInstituteId(targetId);
+    if (!planAccess.features.enquiriesEnabled) {
+      res.status(403).json({ error: 'Enquiries are available on Academy Growth and Academy Elite plans only.' });
+      return;
+    }
+  } else {
+    const tutor = db.prepare("SELECT id FROM tutors WHERE id = ? AND status = 'approved'").get(targetId) as any;
+    if (!tutor) {
+      res.status(404).json({ error: 'Tutor not found' });
+      return;
+    }
+
+    const planAccess = getTutorPlanAccessByTutorId(targetId);
+    if (!planAccess.features.enquiriesEnabled) {
+      res.status(403).json({ error: 'Enquiries are available on Tutor Pro and Tutor Elite plans only.' });
+      return;
+    }
+  }
+
   const user = db.prepare('SELECT name, email FROM users WHERE id = ?').get(req.user!.id) as any;
 
   // Prevent duplicate: block if student already has a non-replied enquiry to same target
   const existing = db.prepare(
     `SELECT id FROM enquiries WHERE student_id = ? AND target_id = ? AND target_type = ? AND status != 'replied'`
-  ).get(req.user!.id, parseInt(target_id), target_type);
+  ).get(req.user!.id, targetId, target_type);
   if (existing) {
     res.status(409).json({ error: 'You already have a pending enquiry to this institute/tutor. Please wait for a reply before sending another.' });
     return;
@@ -33,7 +63,7 @@ router.post('/', authenticate, requireRole('student'), (req: AuthRequest, res: R
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `).run(
     req.user!.id,
-    parseInt(target_id),
+    targetId,
     target_type,
     message.trim(),
     user.name,
@@ -74,6 +104,20 @@ router.get('/received', authenticate, requireRole('institute', 'tutor'), (req: A
     return;
   }
 
+  if (role === 'institute') {
+    const planAccess = getInstitutePlanAccessByUserId(req.user!.id);
+    if (!planAccess.features.enquiriesEnabled) {
+      res.status(403).json({ error: 'Your current academy plan does not include the enquiry inbox.' });
+      return;
+    }
+  } else {
+    const planAccess = getTutorPlanAccessByUserId(req.user!.id);
+    if (!planAccess.features.enquiriesEnabled) {
+      res.status(403).json({ error: 'Your current tutor plan does not include the enquiry inbox.' });
+      return;
+    }
+  }
+
   const enquiries = db.prepare(`
     SELECT * FROM enquiries
     WHERE target_id = ? AND target_type = ?
@@ -99,6 +143,20 @@ router.patch('/:id/status', authenticate, requireRole('institute', 'tutor'), (re
     : db.prepare('SELECT id FROM tutors WHERE user_id = ?').get(req.user!.id) as any;
 
   if (!entity) { res.status(404).json({ error: 'Profile not found' }); return; }
+
+  if (role === 'institute') {
+    const planAccess = getInstitutePlanAccessByUserId(req.user!.id);
+    if (!planAccess.features.enquiriesEnabled) {
+      res.status(403).json({ error: 'Your current academy plan does not include the enquiry inbox.' });
+      return;
+    }
+  } else {
+    const planAccess = getTutorPlanAccessByUserId(req.user!.id);
+    if (!planAccess.features.enquiriesEnabled) {
+      res.status(403).json({ error: 'Your current tutor plan does not include the enquiry inbox.' });
+      return;
+    }
+  }
 
   const enquiry = db.prepare('SELECT * FROM enquiries WHERE id = ?').get(id) as any;
   if (!enquiry || enquiry.target_id !== entity.id || enquiry.target_type !== role) {

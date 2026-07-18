@@ -1,21 +1,21 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { GraduationCap, Eye, EyeOff, ChevronRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
-
-type Role = 'student' | 'institute' | 'tutor';
+import { PROVIDER_CHECKOUT_SESSION_KEY, PROVIDER_DRAFT_ID_KEY } from '../constants/providerOnboarding';
+import type { RegistrationFormDraft, RegistrationRole } from '../types';
 
 export default function Register() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const [step, setStep] = useState<'role' | 'form'>('role');
-  const [role, setRole] = useState<Role>('student');
+  const [role, setRole] = useState<RegistrationRole>('student');
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<RegistrationFormDraft>({
     name: '', email: '', password: '',
     location: '', description: '', contact_email: '', contact_phone: '', contact_website: '',
     subject: '', experience_years: '', hourly_rate: '', bio: '', mode: 'both',
@@ -26,6 +26,22 @@ export default function Register() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    if (role !== 'student') {
+      setLoading(true);
+      try {
+        const { data } = await api.post('/provider-onboarding/drafts', { ...form, role });
+        sessionStorage.setItem(PROVIDER_DRAFT_ID_KEY, data.draft.draftId);
+        sessionStorage.removeItem(PROVIDER_CHECKOUT_SESSION_KEY);
+        navigate('/register/plans', { state: { draftId: data.draft.draftId } });
+      } catch (err: any) {
+        setError(err.response?.data?.error || 'Unable to save your details right now. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     setLoading(true);
     try {
       const payload = { ...form, role };
@@ -44,9 +60,9 @@ export default function Register() {
   };
 
   const roles = [
-    { id: 'student' as Role, label: 'Student', emoji: '🎓', desc: 'Search and compare institutes & tutors' },
-    { id: 'institute' as Role, label: 'Institute', emoji: '🏫', desc: 'Register your educational institute' },
-    { id: 'tutor' as Role, label: 'Tutor', emoji: '👨‍🏫', desc: 'Offer your tutoring services' },
+    { id: 'student' as RegistrationRole, label: 'Student', emoji: '🎓', desc: 'Search and compare institutes & tutors' },
+    { id: 'institute' as RegistrationRole, label: 'Institute', emoji: '🏫', desc: 'Register your educational institute' },
+    { id: 'tutor' as RegistrationRole, label: 'Tutor', emoji: '👨‍🏫', desc: 'Offer your tutoring services' },
   ];
 
   return (
@@ -99,12 +115,12 @@ export default function Register() {
 
               {role === 'institute' && (
                 <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 text-xs rounded-lg px-4 py-3 mb-4">
-                  ⏳ Institute registrations require admin approval before your profile goes live.
+                  ⏳ Academy details are saved first. You will choose a plan and complete payment before your public profile goes live.
                 </div>
               )}
               {role === 'tutor' && (
                 <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 text-xs rounded-lg px-4 py-3 mb-4">
-                  ⏳ Tutor registrations require admin approval before your profile goes live.
+                  ⏳ Tutor details are saved first. You will choose a plan and complete payment before your public profile goes live.
                 </div>
               )}
 
@@ -212,7 +228,7 @@ export default function Register() {
                   disabled={loading}
                   className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg transition-colors disabled:opacity-50 mt-2"
                 >
-                  {loading ? 'Creating account...' : 'Create Account'}
+                  {loading ? (role === 'student' ? 'Creating account...' : 'Saving details...') : role === 'student' ? 'Create Account' : 'Continue to Plans'}
                 </button>
               </form>
 

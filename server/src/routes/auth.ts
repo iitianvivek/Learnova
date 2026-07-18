@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import db from '../db/database';
-import { authenticate, AuthRequest, JWT_SECRET } from '../middleware/auth';
+import { authenticate, AuthRequest, JWT_EXPIRES_IN, JWT_SECRET } from '../middleware/auth';
 
 const router = Router();
 
@@ -26,6 +26,13 @@ router.post('/register', (req: Request, res: Response): void => {
     return;
   }
 
+  if (role !== 'student') {
+    res.status(400).json({
+      error: 'Tutor and academy registration now uses the plan selection flow. Start from provider onboarding instead.',
+    });
+    return;
+  }
+
   if (password.length < 6) {
     res.status(400).json({ error: 'Password must be at least 6 characters' });
     return;
@@ -38,16 +45,6 @@ router.post('/register', (req: Request, res: Response): void => {
     return;
   }
 
-  if (role === 'institute' && !location?.trim()) {
-    res.status(400).json({ error: 'Location is required for institutes' });
-    return;
-  }
-
-  if (role === 'tutor' && !subject?.trim()) {
-    res.status(400).json({ error: 'Subject is required for tutors' });
-    return;
-  }
-
   const hash = bcrypt.hashSync(password, 10);
   const result = db.prepare(
     'INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)'
@@ -55,25 +52,7 @@ router.post('/register', (req: Request, res: Response): void => {
 
   const userId = Number(result.lastInsertRowid);
 
-  try {
-    if (role === 'institute') {
-      db.prepare(
-        'INSERT INTO institutes (user_id, name, location, description, contact_email, contact_phone, contact_website) VALUES (?, ?, ?, ?, ?, ?, ?)'
-      ).run(userId, name.trim(), location.trim(), description || '', contact_email || normalizedEmail, contact_phone || '', contact_website || '');
-    }
-    if (role === 'tutor') {
-      const tutorMode = ['online', 'offline', 'both'].includes(mode) ? mode : 'both';
-      db.prepare(
-        'INSERT INTO tutors (user_id, name, subject, experience_years, hourly_rate, bio, mode) VALUES (?, ?, ?, ?, ?, ?, ?)'
-      ).run(userId, name.trim(), subject.trim(), parseInt(experience_years) || 0, parseFloat(hourly_rate) || 0, bio || '', tutorMode);
-    }
-  } catch (err) {
-    db.prepare('DELETE FROM users WHERE id = ?').run(userId);
-    res.status(500).json({ error: 'Registration failed. Please try again.' });
-    return;
-  }
-
-  const token = jwt.sign({ id: userId, role, name: name.trim() }, JWT_SECRET, { expiresIn: '7d' });
+  const token = jwt.sign({ id: userId, role, name: name.trim() }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
   res.status(201).json({
     token,
     user: { id: userId, name: name.trim(), email: normalizedEmail, role },
@@ -99,7 +78,7 @@ router.post('/login', (req: Request, res: Response): void => {
   const token = jwt.sign(
     { id: user.id, role: user.role, name: user.name },
     JWT_SECRET,
-    { expiresIn: '7d' }
+    { expiresIn: JWT_EXPIRES_IN }
   );
 
   res.json({

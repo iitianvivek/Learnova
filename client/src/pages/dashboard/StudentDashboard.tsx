@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Bookmark, BookmarkX, MessageSquare, Star } from 'lucide-react';
+import { Bookmark, BookmarkX, MessageSquare } from 'lucide-react';
 import type { Bookmark as BookmarkType, Enquiry } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../api/axios';

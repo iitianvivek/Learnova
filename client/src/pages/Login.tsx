@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { GraduationCap, Eye, EyeOff, BookOpen, Users, Star, ArrowRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
@@ -7,6 +7,8 @@ import api from '../api/axios';
 export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const routeState = location.state as { from?: string; message?: string } | null;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
@@ -20,6 +22,10 @@ export default function Login() {
     try {
       const { data } = await api.post('/auth/login', { email, password });
       login(data.token, data.user);
+      if (data.user.role === 'student' && routeState?.from) {
+        navigate(routeState.from);
+        return;
+      }
       switch (data.user.role) {
         case 'admin': navigate('/admin'); break;
         case 'institute': navigate('/dashboard/institute'); break;
@@ -90,6 +96,12 @@ export default function Login() {
           </div>
 
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200/60 p-8">
+            {routeState?.message && (
+              <div className="bg-blue-50 border border-blue-200 text-blue-700 text-sm rounded-xl px-4 py-3 mb-5">
+                {routeState.message}
+              </div>
+            )}
+
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl px-4 py-3 mb-5">
                 {error}
@@ -152,9 +164,6 @@ export default function Login() {
               </Link>
             </div>
 
-            <div className="mt-5 p-3.5 bg-slate-50 border border-slate-100 rounded-xl text-xs text-slate-400 text-center">
-              Admin demo: <span className="font-semibold text-slate-600">admin@learnova.com</span> / <span className="font-semibold text-slate-600">admin123</span>
-            </div>
           </div>
 
           <p className="text-center text-xs text-slate-400 mt-6">

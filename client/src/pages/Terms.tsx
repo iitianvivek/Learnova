@@ -1,4 +1,3 @@
-import React from 'react';
 import { Link } from 'react-router-dom';
 import { GraduationCap } from 'lucide-react';
 
@@ -36,7 +35,7 @@ export default function Terms() {
             },
             {
               title: '4. Institutes & Tutors',
-              body: 'Institutes and tutors must provide accurate information about their services, fees, and qualifications. All registrations are subject to admin approval before appearing publicly. Learnova does not verify academic credentials but expects truthful listings.',
+              body: 'Institutes and tutors must provide accurate information about their services, fees, and qualifications. Provider publication may depend on the onboarding flow in use, including plan selection, payment, or manual review for older registrations. Learnova does not verify academic credentials but expects truthful listings.',
             },
             {
               title: '5. Student Conduct',
@@ -84,7 +83,7 @@ export default function Terms() {
               },
               {
                 title: 'Contact',
-                body: 'For any privacy-related queries, contact us at: admin@learnova.com',
+                body: 'For any privacy-related queries, contact us at: learnova63@gmail.com',
               },
             ].map(s => (
               <div key={s.title} className="mb-5">

@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express';
 import db from '../db/database';
 import { authenticate, requireRole, AuthRequest } from '../middleware/auth';
+import { getInstitutePlanAccessByUserId } from '../services/institutePlanAccess';
+import { getTutorPlanAccessByUserId } from '../services/tutorPlanAccess';
 
 const router = Router();
 
@@ -9,6 +11,26 @@ router.get('/:targetType/:targetId', (req: Request, res: Response): void => {
   const { targetType, targetId } = req.params;
   if (!['institute', 'tutor'].includes(targetType)) {
     res.status(400).json({ error: 'targetType must be institute or tutor' }); return;
+  }
+
+  if (targetType === 'institute') {
+    const institute = db.prepare("SELECT user_id FROM institutes WHERE id = ? AND status = 'approved'").get(parseInt(targetId, 10)) as any;
+    if (institute) {
+      const planAccess = getInstitutePlanAccessByUserId(institute.user_id);
+      if (!planAccess.features.reviewsEnabled) {
+        res.json([]);
+        return;
+      }
+    }
+  } else {
+    const tutor = db.prepare("SELECT user_id FROM tutors WHERE id = ? AND status = 'approved'").get(parseInt(targetId, 10)) as any;
+    if (tutor) {
+      const planAccess = getTutorPlanAccessByUserId(tutor.user_id);
+      if (!planAccess.features.reviewsEnabled) {
+        res.json([]);
+        return;
+      }
+    }
   }
 
   const reviews = db.prepare(`
@@ -39,11 +61,23 @@ router.post('/', authenticate, requireRole('student'), (req: AuthRequest, res: R
 
   // Verify target exists and is approved
   if (target_type === 'institute') {
-    const inst = db.prepare("SELECT id FROM institutes WHERE id = ? AND status = 'approved'").get(target_id);
+    const inst = db.prepare("SELECT id, user_id FROM institutes WHERE id = ? AND status = 'approved'").get(target_id) as any;
     if (!inst) { res.status(404).json({ error: 'Institute not found' }); return; }
+
+    const planAccess = getInstitutePlanAccessByUserId(inst.user_id);
+    if (!planAccess.features.reviewsEnabled) {
+      res.status(403).json({ error: 'Reviews are available on Academy Growth and Academy Elite plans only.' });
+      return;
+    }
   } else {
-    const tutor = db.prepare("SELECT id FROM tutors WHERE id = ? AND status = 'approved'").get(target_id);
+    const tutor = db.prepare("SELECT id, user_id FROM tutors WHERE id = ? AND status = 'approved'").get(target_id) as any;
     if (!tutor) { res.status(404).json({ error: 'Tutor not found' }); return; }
+
+    const planAccess = getTutorPlanAccessByUserId(tutor.user_id);
+    if (!planAccess.features.reviewsEnabled) {
+      res.status(403).json({ error: 'Reviews are available on Tutor Pro and Tutor Elite plans only.' });
+      return;
+    }
   }
 
   try {

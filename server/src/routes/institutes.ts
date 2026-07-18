@@ -2,10 +2,20 @@ import { Router, Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
 import db from '../db/database';
+import { resolveUploadFilePath } from '../config/env';
 import { authenticate, requireRole, AuthRequest } from '../middleware/auth';
 import { upload } from '../middleware/upload';
+import { getInstitutePlanAccessByInstituteId, getInstitutePlanAccessByUserId } from '../services/institutePlanAccess';
 
 const router = Router();
+
+function removeUploadedFiles(files: Express.Multer.File[] = []) {
+  for (const file of files) {
+    if (fs.existsSync(file.path)) {
+      fs.unlinkSync(file.path);
+    }
+  }
+}
 
 function getInstituteById(id: number): any | null {
   const institute = db.prepare(`
@@ -41,6 +51,20 @@ function getInstituteById(id: number): any | null {
     WHERE ist.institute_id = ?
   `).all(id) as any[];
 
+  const planAccess = getInstitutePlanAccessByUserId(institute.user_id);
+  institute.subscription_plan_code = planAccess.planCode;
+  institute.subscription_plan_name = planAccess.planName;
+  institute.plan_features = planAccess.features;
+
+  if (!planAccess.features.reviewsEnabled) {
+    institute.avg_rating = 0;
+    institute.review_count = 0;
+  }
+
+  if (!planAccess.features.starTeachersEnabled) {
+    institute.star_teachers = [];
+  }
+
   return institute;
 }
 
@@ -73,7 +97,7 @@ router.get('/', (req: Request, res: Response): void => {
   }
 
   const query = `
-    SELECT i.id, i.name, i.location, i.description, i.contact_email, i.contact_phone, i.status,
+    SELECT i.id, i.user_id, i.name, i.location, i.description, i.contact_email, i.contact_phone, i.status,
            ROUND(COALESCE(AVG(r.rating), 0), 1) as avg_rating,
            COUNT(DISTINCT r.id) as review_count,
            (SELECT file_path FROM institute_images WHERE institute_id = i.id LIMIT 1) as thumbnail
@@ -96,6 +120,16 @@ router.get('/', (req: Request, res: Response): void => {
       JOIN courses c ON c.id = ic.course_id
       WHERE ic.institute_id = ?
     `).all(inst.id);
+
+    const planAccess = getInstitutePlanAccessByUserId(inst.user_id);
+    inst.subscription_plan_code = planAccess.planCode;
+    inst.subscription_plan_name = planAccess.planName;
+    inst.plan_features = planAccess.features;
+
+    if (!planAccess.features.reviewsEnabled) {
+      inst.avg_rating = 0;
+      inst.review_count = 0;
+    }
   }
 
   res.json(institutes);
@@ -193,6 +227,14 @@ router.post('/:id/star-teachers', authenticate, requireRole('institute', 'admin'
     res.status(403).json({ error: 'Forbidden' }); return;
   }
 
+  const planAccess = getInstitutePlanAccessByInstituteId(id);
+  if (!planAccess.features.starTeachersEnabled) {
+    res.status(403).json({
+      error: 'Star teacher profiles are available on Academy Growth and Academy Elite plans only.',
+    });
+    return;
+  }
+
   const { tutor_id } = req.body;
   if (!tutor_id) { res.status(400).json({ error: 'tutor_id is required' }); return; }
 
@@ -227,12 +269,28 @@ router.post('/:id/images', authenticate, requireRole('institute', 'admin'), uplo
   const institute = db.prepare('SELECT * FROM institutes WHERE id = ?').get(id) as any;
   if (!institute) { res.status(404).json({ error: 'Institute not found' }); return; }
   if (req.user!.role !== 'admin' && institute.user_id !== req.user!.id) {
+    removeUploadedFiles(req.files as Express.Multer.File[]);
     res.status(403).json({ error: 'Forbidden' }); return;
   }
 
   const files = req.files as Express.Multer.File[];
   if (!files || files.length === 0) {
     res.status(400).json({ error: 'No images uploaded' }); return;
+  }
+
+  const planAccess = getInstitutePlanAccessByInstituteId(id);
+  const currentImageCount = (db.prepare('SELECT COUNT(*) as count FROM institute_images WHERE institute_id = ?').get(id) as any).count as number;
+  const maxImages = planAccess.features.maxImages;
+
+  if (maxImages !== null && currentImageCount + files.length > maxImages) {
+    removeUploadedFiles(files);
+    const remainingSlots = Math.max(maxImages - currentImageCount, 0);
+    res.status(400).json({
+      error: remainingSlots > 0
+        ? `Your current plan allows up to ${maxImages} images. You can upload ${remainingSlots} more right now.`
+        : `Your current plan allows up to ${maxImages} images. Please delete an existing image or upgrade your plan.`,
+    });
+    return;
   }
 
   const insertImage = db.prepare('INSERT INTO institute_images (institute_id, file_path) VALUES (?, ?)');
@@ -256,7 +314,7 @@ router.delete('/:id/images/:imageId', authenticate, requireRole('institute', 'ad
   const image = db.prepare('SELECT * FROM institute_images WHERE id = ? AND institute_id = ?').get(imageId, id) as any;
   if (!image) { res.status(404).json({ error: 'Image not found' }); return; }
 
-  const filePath = path.join(process.cwd(), 'uploads', image.file_path);
+  const filePath = resolveUploadFilePath(image.file_path);
   if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
 
   db.prepare('DELETE FROM institute_images WHERE id = ?').run(imageId);

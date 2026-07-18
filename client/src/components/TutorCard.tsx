@@ -1,8 +1,8 @@
-import React from 'react';
 import { Link } from 'react-router-dom';
 import { User, Clock, DollarSign, ChevronRight, PlusCircle } from 'lucide-react';
 import type { Tutor } from '../types';
 import StarRating from './StarRating';
+import { getUploadUrl } from '../utils/runtime';
 
 interface TutorCardProps {
   tutor: Tutor;
@@ -28,7 +28,7 @@ const getGradient = (subject: string) => {
 };
 
 export default function TutorCard({ tutor, showCompare, onCompare, compareSelected }: TutorCardProps) {
-  const avatarUrl = tutor.avatar ? `/uploads/${tutor.avatar}` : null;
+  const avatarUrl = tutor.avatar ? getUploadUrl(tutor.avatar) : null;
   const gradient = getGradient(tutor.subject);
 
   return (

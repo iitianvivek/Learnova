@@ -1,12 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { MapPin, Phone, Mail, Globe, BookOpen, Star, ChevronLeft, Users, MessageSquare } from 'lucide-react';
+import { MapPin, Phone, Mail, Globe, BookOpen, Star, ChevronLeft, MessageSquare } from 'lucide-react';
 import type { Institute } from '../types';
 import StarRating from '../components/StarRating';
 import ReviewSection from '../components/ReviewSection';
 import BookmarkButton from '../components/BookmarkButton';
 import EnquiryModal from '../components/EnquiryModal';
 import api from '../api/axios';
+import { getUploadUrl } from '../utils/runtime';
 
 export default function InstituteProfile() {
   const { id } = useParams<{ id: string }>();
@@ -35,6 +36,8 @@ export default function InstituteProfile() {
   const images = institute.images || [];
   const courses = institute.courses || [];
   const starTeachers = institute.star_teachers || [];
+  const reviewsEnabled = institute.plan_features?.reviewsEnabled ?? true;
+  const enquiriesEnabled = institute.plan_features?.enquiriesEnabled ?? true;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -51,7 +54,7 @@ export default function InstituteProfile() {
           <div className="mb-6">
             <div className="rounded-2xl overflow-hidden h-72 bg-blue-100">
               <img
-                src={`/uploads/${images[activeImage].file_path}`}
+                src={getUploadUrl(images[activeImage].file_path)}
                 alt={institute.name}
                 className="w-full h-full object-cover"
               />
@@ -61,7 +64,7 @@ export default function InstituteProfile() {
                 {images.map((img, i) => (
                   <button key={img.id} onClick={() => setActiveImage(i)}
                     className={`flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${activeImage === i ? 'border-blue-500' : 'border-transparent opacity-70 hover:opacity-100'}`}>
-                    <img src={`/uploads/${img.file_path}`} alt="" className="w-full h-full object-cover" />
+                    <img src={getUploadUrl(img.file_path)} alt="" className="w-full h-full object-cover" />
                   </button>
                 ))}
               </div>
@@ -92,13 +95,19 @@ export default function InstituteProfile() {
           </div>
 
           {/* Enquiry button */}
-          <button
-            onClick={() => setShowEnquiry(true)}
-            className="mt-5 w-full flex items-center justify-center gap-2 text-white font-bold py-3.5 rounded-2xl transition-all hover:opacity-90 hover:scale-[1.01] active:scale-[0.98] shadow-lg"
-            style={{ background: 'linear-gradient(135deg, #6C4FD8, #2F6FED)', boxShadow: '0 6px 24px rgba(108,79,216,0.3)' }}
-          >
-            <MessageSquare className="w-4 h-4" /> Send Enquiry
-          </button>
+          {enquiriesEnabled ? (
+            <button
+              onClick={() => setShowEnquiry(true)}
+              className="mt-5 w-full flex items-center justify-center gap-2 text-white font-bold py-3.5 rounded-2xl transition-all hover:opacity-90 hover:scale-[1.01] active:scale-[0.98] shadow-lg"
+              style={{ background: 'linear-gradient(135deg, #6C4FD8, #2F6FED)', boxShadow: '0 6px 24px rgba(108,79,216,0.3)' }}
+            >
+              <MessageSquare className="w-4 h-4" /> Send Enquiry
+            </button>
+          ) : (
+            <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              Enquiries are not available on this institute's current plan. Upgrade to Academy Growth or Academy Elite to receive student leads.
+            </div>
+          )}
 
           {institute.description && (
             <p className="mt-4 text-gray-600 text-sm leading-relaxed">{institute.description}</p>
@@ -158,7 +167,19 @@ export default function InstituteProfile() {
 
             {/* Reviews */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-              <ReviewSection targetId={institute.id} targetType="institute" />
+              {reviewsEnabled ? (
+                <ReviewSection targetId={institute.id} targetType="institute" />
+              ) : (
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900 mb-3 flex items-center gap-2">
+                    <MessageSquare className="w-5 h-5 text-blue-600" />
+                    Reviews
+                  </h3>
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-800">
+                    Reviews are not available on this institute's current plan. Upgrade to Academy Growth or Academy Elite to collect student ratings.
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

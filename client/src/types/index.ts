@@ -6,6 +6,84 @@ export interface User {
   created_at?: string;
 }
 
+export type RegistrationRole = 'student' | 'tutor' | 'institute';
+
+export type ProviderRole = 'tutor' | 'institute';
+
+export type BillingDurationMonths = 1 | 3 | 6 | 12;
+
+export interface ProviderPlan {
+  role: ProviderRole;
+  code: string;
+  name: string;
+  audience: string;
+  originalMonthly: number;
+  launchMonthly: number;
+  badge?: string;
+  cta: string;
+  durationPricing: Record<BillingDurationMonths, number>;
+  included: string[];
+  notIncluded?: string[];
+  plusLabel?: string;
+  extraFeatures?: string[];
+  cardStyle: 'starter' | 'popular' | 'elite';
+}
+
+export interface ProviderPlanCatalogResponse {
+  plans: ProviderPlan[];
+  couponCode: string;
+}
+
+export interface RegistrationFormDraft {
+  name: string;
+  email: string;
+  password: string;
+  location: string;
+  description: string;
+  contact_email: string;
+  contact_phone: string;
+  contact_website: string;
+  subject: string;
+  experience_years: string;
+  hourly_rate: string;
+  bio: string;
+  mode: 'online' | 'offline' | 'both';
+}
+
+export interface ProviderRegistrationDraft {
+  role: ProviderRole;
+  form: RegistrationFormDraft;
+}
+
+export interface ProviderDraftSummary {
+  draftId: string;
+  role: ProviderRole;
+  name: string;
+  email: string;
+  location?: string;
+  subject?: string;
+  selectedPlanCode?: string | null;
+  selectedDurationMonths?: BillingDurationMonths | null;
+  selectedAmount?: number | null;
+  appliedCouponCode?: string | null;
+  status: string;
+}
+
+export interface ProviderCheckoutSession {
+  sessionId: string;
+  draftId: string;
+  role: ProviderRole;
+  plan: ProviderPlan;
+  durationMonths: BillingDurationMonths;
+  amount: number;
+  currency: string;
+  status: string;
+  gateway: string;
+  appliedCouponCode?: string | null;
+  paymentReference?: string | null;
+  providerSummary: ProviderDraftSummary;
+}
+
 export interface InstituteImage {
   id: number;
   file_path: string;
@@ -34,6 +112,15 @@ export interface StarTeacher {
   avatar: string | null;
 }
 
+export interface ProviderPlanFeatures {
+  maxImages: number | null;
+  reviewsEnabled: boolean;
+  enquiriesEnabled: boolean;
+  publicSearchEnabled: boolean;
+  starTeachersEnabled: boolean;
+  isLegacyAccess: boolean;
+}
+
 export interface Institute {
   id: number;
   user_id: number;
@@ -51,6 +138,9 @@ export interface Institute {
   images?: InstituteImage[];
   courses?: InstituteCourse[];
   star_teachers?: StarTeacher[];
+  subscription_plan_code?: string | null;
+  subscription_plan_name?: string | null;
+  plan_features?: ProviderPlanFeatures;
 }
 
 export interface Availability {
@@ -81,6 +171,9 @@ export interface Tutor {
   avatar?: string | null;
   images?: TutorImage[];
   availability?: Availability[];
+  subscription_plan_code?: string | null;
+  subscription_plan_name?: string | null;
+  plan_features?: ProviderPlanFeatures;
 }
 
 export interface Review {
@@ -131,8 +224,75 @@ export interface AdminStats {
   total_tutors: number;
   approved_tutors: number;
   pending_tutors: number;
+  pending_provider_payments: number;
   total_reviews: number;
   total_bookmarks: number;
+}
+
+export interface AdminManagedSubscription {
+  planCode: string;
+  durationMonths: number;
+  amount: number;
+  currency: string;
+  status: string;
+  startsAt: string;
+  endsAt: string;
+}
+
+export interface AdminManagedInstituteProfile {
+  id: number;
+  status: 'pending' | 'approved' | 'rejected';
+  location: string;
+  description: string;
+  contact_email: string;
+  contact_phone: string;
+  contact_website: string;
+}
+
+export interface AdminManagedTutorProfile {
+  id: number;
+  status: 'pending' | 'approved' | 'rejected';
+  subject: string;
+  experience_years: number;
+  hourly_rate: number;
+  bio: string;
+  mode: 'online' | 'offline' | 'both';
+}
+
+export interface AdminManagedUser {
+  id: number;
+  name: string;
+  email: string;
+  role: 'student' | 'tutor' | 'institute' | 'admin';
+  created_at: string;
+  profile: AdminManagedInstituteProfile | AdminManagedTutorProfile | null;
+  subscription: AdminManagedSubscription | null;
+}
+
+export interface AdminProviderDraft {
+  draftId: string;
+  role: 'tutor' | 'institute';
+  name: string;
+  email: string;
+  location?: string;
+  subject?: string;
+  description?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  contactWebsite?: string;
+  experienceYears?: number;
+  hourlyRate?: number;
+  bio?: string;
+  mode?: 'online' | 'offline' | 'both';
+  selectedPlanCode?: string | null;
+  selectedPlanName?: string;
+  selectedDurationMonths?: number | null;
+  selectedAmount?: number | null;
+  checkoutStatus?: string | null;
+  paymentReference?: string;
+  status: 'draft' | 'checkout_pending' | 'paid' | 'converted' | 'expired';
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Enquiry {

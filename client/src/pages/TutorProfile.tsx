@@ -1,12 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { User, Clock, IndianRupee, Calendar, ChevronLeft, MessageSquare, Wifi, WifiOff } from 'lucide-react';
+import { User, Clock, DollarSign, Calendar, ChevronLeft, MessageSquare } from 'lucide-react';
 import type { Tutor } from '../types';
 import StarRating from '../components/StarRating';
 import ReviewSection from '../components/ReviewSection';
 import BookmarkButton from '../components/BookmarkButton';
 import EnquiryModal from '../components/EnquiryModal';
 import api from '../api/axios';
+import { getUploadUrl } from '../utils/runtime';
 
 const DAY_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -36,7 +37,9 @@ export default function TutorProfile() {
   const images = tutor.images || [];
   const availability = tutor.availability || [];
   const sortedAvail = [...availability].sort((a, b) => DAY_ORDER.indexOf(a.day_of_week) - DAY_ORDER.indexOf(b.day_of_week));
-  const avatarUrl = images.length > 0 ? `/uploads/${images[0].file_path}` : null;
+  const avatarUrl = images.length > 0 ? getUploadUrl(images[0].file_path) : null;
+  const reviewsEnabled = tutor.plan_features?.reviewsEnabled ?? true;
+  const enquiriesEnabled = tutor.plan_features?.enquiriesEnabled ?? true;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -73,7 +76,7 @@ export default function TutorProfile() {
                 </div>
                 <div className="bg-green-50 rounded-xl p-3">
                   <div className="flex items-center justify-center gap-1 text-green-600 mb-1">
-                    <IndianRupee className="w-4 h-4" />
+                    <DollarSign className="w-4 h-4" />
                   </div>
                   <p className="font-bold text-gray-900">{tutor.hourly_rate > 0 ? `₹${tutor.hourly_rate}` : '—'}</p>
                   <p className="text-gray-400 text-xs">per hour</p>
@@ -83,13 +86,19 @@ export default function TutorProfile() {
               <div className="mt-4">
                 <BookmarkButton targetId={tutor.id} targetType="tutor" />
               </div>
-              <button
-                onClick={() => setShowEnquiry(true)}
-                className="mt-3 w-full flex items-center justify-center gap-2 text-white font-bold py-3 rounded-2xl transition-all hover:opacity-90 text-sm shadow-lg"
-                style={{ background: 'linear-gradient(135deg, #6C4FD8, #2F6FED)', boxShadow: '0 6px 24px rgba(108,79,216,0.3)' }}
-              >
-                <MessageSquare className="w-4 h-4" /> Send Enquiry
-              </button>
+              {enquiriesEnabled ? (
+                <button
+                  onClick={() => setShowEnquiry(true)}
+                  className="mt-3 w-full flex items-center justify-center gap-2 text-white font-bold py-3 rounded-2xl transition-all hover:opacity-90 text-sm shadow-lg"
+                  style={{ background: 'linear-gradient(135deg, #6C4FD8, #2F6FED)', boxShadow: '0 6px 24px rgba(108,79,216,0.3)' }}
+                >
+                  <MessageSquare className="w-4 h-4" /> Send Enquiry
+                </button>
+              ) : (
+                <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 text-left">
+                  Enquiries are available on Tutor Pro and Tutor Elite plans only.
+                </div>
+              )}
             </div>
 
             {/* Availability */}
@@ -117,7 +126,7 @@ export default function TutorProfile() {
                 <div className="grid grid-cols-3 gap-2">
                   {images.map(img => (
                     <div key={img.id} className="aspect-square rounded-lg overflow-hidden">
-                      <img src={`/uploads/${img.file_path}`} alt="" className="w-full h-full object-cover" />
+                      <img src={getUploadUrl(img.file_path)} alt="" className="w-full h-full object-cover" />
                     </div>
                   ))}
                 </div>
@@ -137,7 +146,19 @@ export default function TutorProfile() {
 
             {/* Reviews */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-              <ReviewSection targetId={tutor.id} targetType="tutor" />
+              {reviewsEnabled ? (
+                <ReviewSection targetId={tutor.id} targetType="tutor" />
+              ) : (
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900 mb-3 flex items-center gap-2">
+                    <MessageSquare className="w-5 h-5 text-blue-600" />
+                    Reviews
+                  </h3>
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-800">
+                    Reviews are available on Tutor Pro and Tutor Elite plans only.
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -154,4 +175,3 @@ export default function TutorProfile() {
     </div>
   );
 }
- 

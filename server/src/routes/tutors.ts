@@ -2,10 +2,20 @@ import { Router, Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
 import db from '../db/database';
+import { resolveUploadFilePath } from '../config/env';
 import { authenticate, requireRole, AuthRequest } from '../middleware/auth';
 import { upload } from '../middleware/upload';
+import { getTutorPlanAccessByTutorId, getTutorPlanAccessByUserId } from '../services/tutorPlanAccess';
 
 const router = Router();
+
+function removeUploadedFiles(files: Express.Multer.File[] = []) {
+  for (const file of files) {
+    if (fs.existsSync(file.path)) {
+      fs.unlinkSync(file.path);
+    }
+  }
+}
 
 function getTutorById(id: number): any | null {
   const tutor = db.prepare(`
@@ -25,8 +35,29 @@ function getTutorById(id: number): any | null {
   ).all(id) as any[];
 
   tutor.availability = db.prepare(
-    'SELECT id, day_of_week, start_time, end_time FROM tutor_availability WHERE tutor_id = ? ORDER BY CASE day_of_week WHEN "Monday" THEN 1 WHEN "Tuesday" THEN 2 WHEN "Wednesday" THEN 3 WHEN "Thursday" THEN 4 WHEN "Friday" THEN 5 WHEN "Saturday" THEN 6 WHEN "Sunday" THEN 7 END'
+    `SELECT id, day_of_week, start_time, end_time
+     FROM tutor_availability
+     WHERE tutor_id = ?
+     ORDER BY CASE day_of_week
+       WHEN 'Monday' THEN 1
+       WHEN 'Tuesday' THEN 2
+       WHEN 'Wednesday' THEN 3
+       WHEN 'Thursday' THEN 4
+       WHEN 'Friday' THEN 5
+       WHEN 'Saturday' THEN 6
+       WHEN 'Sunday' THEN 7
+     END`
   ).all(id) as any[];
+
+  const planAccess = getTutorPlanAccessByUserId(tutor.user_id);
+  tutor.subscription_plan_code = planAccess.planCode;
+  tutor.subscription_plan_name = planAccess.planName;
+  tutor.plan_features = planAccess.features;
+
+  if (!planAccess.features.reviewsEnabled) {
+    tutor.avg_rating = 0;
+    tutor.review_count = 0;
+  }
 
   return tutor;
 }
@@ -54,7 +85,7 @@ router.get('/', (req: Request, res: Response): void => {
   if (minRating) { having = `HAVING avg_rating >= ?`; params.push(parseFloat(minRating as string)); }
 
   const query = `
-    SELECT t.id, t.name, t.subject, t.experience_years, t.hourly_rate, t.bio,
+    SELECT t.id, t.user_id, t.name, t.subject, t.experience_years, t.hourly_rate, t.bio,
            ROUND(COALESCE(AVG(r.rating), 0), 1) as avg_rating,
            COUNT(DISTINCT r.id) as review_count,
            (SELECT file_path FROM tutor_images WHERE tutor_id = t.id LIMIT 1) as avatar
@@ -68,7 +99,22 @@ router.get('/', (req: Request, res: Response): void => {
   `;
   params.push(parseInt(limit as string), offset);
 
-  res.json(db.prepare(query).all(...params));
+  const tutors = db.prepare(query).all(...params) as any[];
+  const visibleTutors = tutors.filter((tutor) => {
+    const planAccess = getTutorPlanAccessByUserId(tutor.user_id);
+    tutor.subscription_plan_code = planAccess.planCode;
+    tutor.subscription_plan_name = planAccess.planName;
+    tutor.plan_features = planAccess.features;
+
+    if (!planAccess.features.reviewsEnabled) {
+      tutor.avg_rating = 0;
+      tutor.review_count = 0;
+    }
+
+    return planAccess.features.publicSearchEnabled;
+  });
+
+  res.json(visibleTutors);
 });
 
 // GET /api/tutors/:id
@@ -159,12 +205,33 @@ router.post('/:id/images', authenticate, requireRole('tutor', 'admin'), upload.a
   const tutor = db.prepare('SELECT * FROM tutors WHERE id = ?').get(id) as any;
   if (!tutor) { res.status(404).json({ error: 'Tutor not found' }); return; }
   if (req.user!.role !== 'admin' && tutor.user_id !== req.user!.id) {
+    removeUploadedFiles(req.files as Express.Multer.File[]);
     res.status(403).json({ error: 'Forbidden' }); return;
   }
 
   const files = req.files as Express.Multer.File[];
   if (!files || files.length === 0) {
     res.status(400).json({ error: 'No images uploaded' }); return;
+  }
+
+  const planAccess = getTutorPlanAccessByTutorId(id);
+  const currentImageCount = (db.prepare('SELECT COUNT(*) as count FROM tutor_images WHERE tutor_id = ?').get(id) as any).count as number;
+  const maxImages = planAccess.features.maxImages;
+
+  if (maxImages !== null && currentImageCount + files.length > maxImages) {
+    removeUploadedFiles(files);
+    if (maxImages === 0) {
+      res.status(403).json({ error: 'Image galleries are available on Tutor Pro and Tutor Elite plans only.' });
+      return;
+    }
+
+    const remainingSlots = Math.max(maxImages - currentImageCount, 0);
+    res.status(400).json({
+      error: remainingSlots > 0
+        ? `Your current plan allows up to ${maxImages} images. You can upload ${remainingSlots} more right now.`
+        : `Your current plan allows up to ${maxImages} images. Please delete an existing image or upgrade your plan.`,
+    });
+    return;
   }
 
   const insert = db.prepare('INSERT INTO tutor_images (tutor_id, file_path) VALUES (?, ?)');
@@ -188,7 +255,7 @@ router.delete('/:id/images/:imageId', authenticate, requireRole('tutor', 'admin'
   const image = db.prepare('SELECT * FROM tutor_images WHERE id = ? AND tutor_id = ?').get(imageId, id) as any;
   if (!image) { res.status(404).json({ error: 'Image not found' }); return; }
 
-  const filePath = path.join(process.cwd(), 'uploads', image.file_path);
+  const filePath = resolveUploadFilePath(image.file_path);
   if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
 
   db.prepare('DELETE FROM tutor_images WHERE id = ?').run(imageId);

@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Upload, X, Plus, Trash2, MessageSquare } from 'lucide-react';
 import type { Tutor, Availability, Enquiry } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../api/axios';
+import { getUploadUrl } from '../../utils/runtime';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -57,8 +58,8 @@ export default function TutorDashboard() {
   };
 
   useEffect(() => {
-    if (tab === 'enquiries') fetchEnquiries();
-  }, [tab]);
+    if (tab === 'enquiries' && (tutor?.plan_features?.enquiriesEnabled ?? true)) fetchEnquiries();
+  }, [tab, tutor?.plan_features?.enquiriesEnabled]);
 
   const saveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,6 +120,14 @@ export default function TutorDashboard() {
   if (loading) return <div className="min-h-screen flex items-center justify-center text-gray-400">Loading...</div>;
 
   const status = tutor?.status;
+  const planName = tutor?.subscription_plan_name || 'Legacy Access';
+  const planFeatures = tutor?.plan_features;
+  const imageCount = tutor?.images?.length || 0;
+  const imageLimit = planFeatures?.maxImages ?? null;
+  const remainingImageSlots = imageLimit === null ? null : Math.max(imageLimit - imageCount, 0);
+  const reviewsEnabled = planFeatures?.reviewsEnabled ?? true;
+  const enquiriesEnabled = planFeatures?.enquiriesEnabled ?? true;
+  const publicSearchEnabled = planFeatures?.publicSearchEnabled ?? true;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -128,6 +137,23 @@ export default function TutorDashboard() {
             <div>
               <h1 className="text-2xl font-extrabold text-gray-900">{tutor?.name || user?.name}</h1>
               <p className="text-gray-500 text-sm mt-1">Tutor Dashboard · ID: {tutor?.id}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <span className="inline-flex items-center rounded-full bg-violet-50 px-3 py-1 text-xs font-bold text-violet-700 border border-violet-200">
+                  Plan: {planName}
+                </span>
+                <span className="inline-flex items-center rounded-full bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600 border border-slate-200">
+                  Gallery: {imageLimit === null ? `${imageCount} / Unlimited` : `${imageCount} / ${imageLimit}`}
+                </span>
+                <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold border ${reviewsEnabled ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                  Reviews: {reviewsEnabled ? 'Enabled' : 'Pro or Elite only'}
+                </span>
+                <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold border ${enquiriesEnabled ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                  Enquiries: {enquiriesEnabled ? 'Enabled' : 'Pro or Elite only'}
+                </span>
+                <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold border ${publicSearchEnabled ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                  Search Listing: {publicSearchEnabled ? 'Visible' : 'Upgrade required'}
+                </span>
+              </div>
             </div>
             <span className={`px-3 py-1 rounded-full text-sm font-semibold ${status === 'approved' ? 'bg-green-100 text-green-700' : status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
               {status === 'approved' ? '✓ Approved' : status === 'rejected' ? '✗ Rejected' : '⏳ Pending Approval'}
@@ -135,7 +161,7 @@ export default function TutorDashboard() {
           </div>
           {status === 'pending' && (
             <p className="mt-3 text-sm text-yellow-700 bg-yellow-50 rounded-lg p-3">
-              Your profile is under review. You can update details while waiting for approval.
+              Your profile is still in the legacy manual review queue. New paid provider signups are published after checkout, but older pending listings can still be approved here.
             </p>
           )}
         </div>
@@ -256,6 +282,13 @@ export default function TutorDashboard() {
           <div className="space-y-5">
             <form onSubmit={uploadImages} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
               <h2 className="font-bold text-gray-900 text-lg mb-4">Upload Images</h2>
+              <p className="text-sm text-gray-500 mb-4">
+                {imageLimit === null
+                  ? `Your current plan supports an unlimited gallery. ${imageCount} image${imageCount !== 1 ? 's' : ''} uploaded so far.`
+                  : imageLimit === 0
+                    ? 'Image galleries are available on Tutor Pro and Tutor Elite plans only.'
+                    : `Your current plan allows up to ${imageLimit} images. ${remainingImageSlots} slot${remainingImageSlots !== 1 ? 's' : ''} remaining.`}
+              </p>
               <input type="file" accept="image/*" multiple onChange={e => setImageFiles(e.target.files)}
                 className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
               <button type="submit" disabled={!imageFiles || uploading}
@@ -270,7 +303,7 @@ export default function TutorDashboard() {
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {tutor.images.map(img => (
                     <div key={img.id} className="relative group aspect-square rounded-xl overflow-hidden bg-gray-100">
-                      <img src={`/uploads/${img.file_path}`} alt="" className="w-full h-full object-cover" />
+                      <img src={getUploadUrl(img.file_path)} alt="" className="w-full h-full object-cover" />
                       <button onClick={() => deleteImage(img.id)}
                         className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <X className="w-3 h-3" />
@@ -285,7 +318,11 @@ export default function TutorDashboard() {
         {/* Enquiries Tab */}
         {tab === 'enquiries' && (
           <div className="space-y-4">
-            {enquiriesLoading ? (
+            {!enquiriesEnabled ? (
+              <div className="bg-amber-50 rounded-2xl border border-amber-200 p-6 text-sm text-amber-800">
+                Student enquiries are available on Tutor Pro and Tutor Elite plans only.
+              </div>
+            ) : enquiriesLoading ? (
               <div className="text-center py-12 text-brand-secondary">Loading enquiries…</div>
             ) : enquiries.length === 0 ? (
               <div className="bg-white rounded-2xl border border-brand-border p-12 text-center">

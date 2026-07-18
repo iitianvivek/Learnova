@@ -1,5 +1,7 @@
 import { Router, Request, Response } from 'express';
 import db from '../db/database';
+import { getInstitutePlanAccessByUserId } from '../services/institutePlanAccess';
+import { getTutorPlanAccessByUserId } from '../services/tutorPlanAccess';
 
 const router = Router();
 
@@ -34,7 +36,7 @@ router.get('/', (req: Request, res: Response): void => {
     if (minRating) { having = `HAVING avg_rating >= ?`; params.push(parseFloat(minRating as string)); }
 
     const query = `
-      SELECT i.id, i.name, i.location, i.description, i.contact_email, i.contact_phone,
+      SELECT i.id, i.user_id, i.name, i.location, i.description, i.contact_email, i.contact_phone,
              ROUND(COALESCE(AVG(r.rating), 0), 1) as avg_rating,
              COUNT(DISTINCT r.id) as review_count,
              (SELECT file_path FROM institute_images WHERE institute_id = i.id LIMIT 1) as thumbnail
@@ -54,6 +56,16 @@ router.get('/', (req: Request, res: Response): void => {
         SELECT c.name, c.category FROM institute_courses ic
         JOIN courses c ON c.id = ic.course_id WHERE ic.institute_id = ?
       `).all(inst.id);
+
+      const planAccess = getInstitutePlanAccessByUserId(inst.user_id);
+      inst.subscription_plan_code = planAccess.planCode;
+      inst.subscription_plan_name = planAccess.planName;
+      inst.plan_features = planAccess.features;
+
+      if (!planAccess.features.reviewsEnabled) {
+        inst.avg_rating = 0;
+        inst.review_count = 0;
+      }
     }
 
     // Filter by subject (course name)
@@ -100,7 +112,7 @@ router.get('/', (req: Request, res: Response): void => {
     if (minRating) { having = `HAVING avg_rating >= ?`; params.push(parseFloat(minRating as string)); }
 
     const query = `
-      SELECT t.id, t.name, t.subject, t.experience_years, t.hourly_rate, t.bio, t.mode,
+      SELECT t.id, t.user_id, t.name, t.subject, t.experience_years, t.hourly_rate, t.bio, t.mode,
              ROUND(COALESCE(AVG(r.rating), 0), 1) as avg_rating,
              COUNT(DISTINCT r.id) as review_count,
              (SELECT file_path FROM tutor_images WHERE tutor_id = t.id LIMIT 1) as avatar
@@ -113,7 +125,20 @@ router.get('/', (req: Request, res: Response): void => {
       LIMIT ? OFFSET ?
     `;
     params.push(parseInt(limit as string), offset);
-    results.tutors = db.prepare(query).all(...params) as any[];
+    const tutors = db.prepare(query).all(...params) as any[];
+    results.tutors = tutors.filter((tutor: any) => {
+      const planAccess = getTutorPlanAccessByUserId(tutor.user_id);
+      tutor.subscription_plan_code = planAccess.planCode;
+      tutor.subscription_plan_name = planAccess.planName;
+      tutor.plan_features = planAccess.features;
+
+      if (!planAccess.features.reviewsEnabled) {
+        tutor.avg_rating = 0;
+        tutor.review_count = 0;
+      }
+
+      return planAccess.features.publicSearchEnabled;
+    });
   }
 
   res.json(results);
@@ -161,21 +186,30 @@ router.get('/compare', (req: Request, res: Response): void => {
         SELECT t.name, t.subject FROM institute_star_teachers ist
         JOIN tutors t ON t.id = ist.tutor_id WHERE ist.institute_id = ?
       `).all(item.id);
+
+      const planAccess = getInstitutePlanAccessByUserId(item.user_id);
+      item.subscription_plan_code = planAccess.planCode;
+      item.subscription_plan_name = planAccess.planName;
+      item.plan_features = planAccess.features;
+
+      if (!planAccess.features.reviewsEnabled) {
+        item.avg_rating = 0;
+        item.review_count = 0;
+      }
+
+      if (!planAccess.features.starTeachersEnabled) {
+        item.star_teachers = [];
+      }
     }
 
     // Find shared courses across all selected institutes
-    // Find shared courses across all selected institutes
     if (items.length > 1) {
-      const allCourseSets: Set<number>[] = items.map((inst: any) =>
-        new Set<number>(
-          inst.courses.map((c: any) => Number(c.course_id))
-        )
+      const allCourseSets = items.map((inst: any) =>
+        new Set<number>(inst.courses.map((c: any) => c.course_id))
       );
-
-      const sharedCourseIds = Array.from(allCourseSets[0]).filter((cid: number) =>
-        allCourseSets.every((s) => s.has(cid))
+      const sharedCourseIds = [...allCourseSets[0]].filter(cid =>
+        allCourseSets.every((s: Set<number>) => s.has(cid))
       );
-
       res.json({ items, sharedCourseIds, type: 'institute' });
       return;
     }
@@ -199,9 +233,19 @@ router.get('/compare', (req: Request, res: Response): void => {
     for (const item of items) {
       item.images = db.prepare('SELECT file_path FROM tutor_images WHERE tutor_id = ? LIMIT 1').all(item.id);
       item.availability = db.prepare('SELECT day_of_week, start_time, end_time FROM tutor_availability WHERE tutor_id = ?').all(item.id);
+
+      const planAccess = getTutorPlanAccessByUserId(item.user_id);
+      item.subscription_plan_code = planAccess.planCode;
+      item.subscription_plan_name = planAccess.planName;
+      item.plan_features = planAccess.features;
+
+      if (!planAccess.features.reviewsEnabled) {
+        item.avg_rating = 0;
+        item.review_count = 0;
+      }
     }
 
-    res.json({ items, type: 'tutor' });
+    res.json({ items: items.filter((item: any) => item.plan_features.publicSearchEnabled), type: 'tutor' });
     return;
   }
 

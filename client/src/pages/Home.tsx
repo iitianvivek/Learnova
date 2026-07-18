@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Search, BookOpen, ArrowRight, Sparkles, MapPin, ChevronDown } from 'lucide-react';
 import type { Institute, Tutor } from '../types';

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { MessageSquare, Trash2 } from 'lucide-react';
 import type { Review } from '../types';
 import { useAuth } from '../context/AuthContext';
